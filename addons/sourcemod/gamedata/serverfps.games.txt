@@ -1,0 +1,44 @@
+"Games"
+{
+	"#default"
+	{
+		"Addresses"
+		{
+			"HostTimeFrame"
+			{
+				"windows"
+				{
+					"signature"	"GetStatsString"				
+					"read"		"79"
+					// ALTERNATIVE 1: -4
+				}
+				"linux"
+				{
+					"signature"	"host_frametime"
+				}
+				"mac"
+				{
+					"signature"	"host_frametime"
+				}
+			}
+		}
+		
+		"Signatures"
+		{
+			"GetStatsString"
+			{
+				"library"	"engine"
+				"windows"	"\x55\x8B\xEC\x83\xEC\x0C\xD9\xEE\x8D\x45\xFC\x56\x57\x50\x8D\x45\xF8"
+				/* 55 8B EC 83 EC 0C D9 EE 8D 45 FC 56 57 50 8D 45 F8 */
+				/* ALTERNATIVE 1: 2B F0 D9 E8 8D 47 FF DE F1 56 83 EC 08 DD 1C 24 50 */
+			}
+			
+			"host_frametime"
+			{
+				"library"		"engine"
+				"linux"			"@host_frametime"
+				"mac"			"@host_frametime"
+			}
+		}
+	}
+}
