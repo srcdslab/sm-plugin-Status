@@ -22,7 +22,7 @@ public Plugin myinfo =
 	name         = "Status Fixer",
 	author       = "zaCade + BotoX + Obus",
 	description  = "Fixes the \"status\" command",
-	version      = "2.0.0",
+	version      = "2.0.1",
 	url          = "https://github.com/CSSZombieEscape/sm-plugins/tree/master/Status/"
 };
 
@@ -160,7 +160,7 @@ public Action Command_Status(int client, const char[] command, int args)
 			else
 				FormatEx(sPlayerTime, sizeof(sPlayerTime), "%d:%02d", iMinutes, iSeconds);
 
-			FormatEx(sPlayerPing, sizeof(sPlayerPing), "%d", RoundFloat(GetClientLatency(player, NetFlow_Outgoing) * 800));
+			FormatEx(sPlayerPing, sizeof(sPlayerPing), "%d", RoundFloat(GetClientLatency(player, NetFlow_Outgoing) * 1000));
 			FormatEx(sPlayerLoss, sizeof(sPlayerLoss), "%d", RoundFloat(GetClientAvgLoss(player, NetFlow_Outgoing) * 100));
 		}
 
@@ -172,7 +172,7 @@ public Action Command_Status(int client, const char[] command, int args)
 		else
 			FormatEx(sPlayerState, sizeof(sPlayerState), "spawning");
 
-		if(GetAdminFlag(GetUserAdmin(client), Admin_Custom3))
+		if(GetAdminFlag(GetUserAdmin(client), Admin_RCON))
 			GetClientIP(player, sPlayerAddr, sizeof(sPlayerAddr));
 
 		PrintToConsole(client, "# %8s %40s %24s %12s %4s %4s %s %s",
