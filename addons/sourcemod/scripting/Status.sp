@@ -73,7 +73,7 @@ public Action Command_Status(int client, const char[] command, int args)
 	GetServerNetStats(fServerDataIn, fServerDataOut);
 
 	char sServerData[128], sServerMap[128];
-	if (client > 0)
+	if (client > 0 && client <= MaxClients)
 	{
 		float fPosition[3];
 		float fClientDataIn, fClientDataOut;
