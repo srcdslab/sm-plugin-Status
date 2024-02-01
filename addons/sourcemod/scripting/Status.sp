@@ -43,108 +43,106 @@ public void OnPluginStart()
 
 public Action Command_Status(int client, const char[] command, int args)
 {
-	static char sServerName[128];
-	static char sServerTags[128];
-	static char sServerAdress[128];
+	bool bGeoIP = false;
+	bool bIsAdmin = false;
+	static char sHostName[128], sServerName[256];
+	static char sTags[128], sServerTags[256];
+	static char sAdress[128], sServerAdress[256];
 
 	int iServerIP   = g_Cvar_HostIP.IntValue;
 	int iServerPort = g_Cvar_HostPort.IntValue;
 
-	g_Cvar_HostName.GetString(sServerName, sizeof(sServerName));
-	g_Cvar_HostTags.GetString(sServerTags, sizeof(sServerTags));
+	g_Cvar_HostName.GetString(sHostName, sizeof(sHostName));
+	g_Cvar_HostTags.GetString(sTags, sizeof(sTags));
 
-	FormatEx(sServerAdress, sizeof(sServerAdress), "%d.%d.%d.%d:%d", iServerIP >>> 24 & 255, iServerIP >>> 16 & 255, iServerIP >>> 8 & 255, iServerIP & 255, iServerPort);
+	FormatEx(sServerName, sizeof(sServerName), "hostname: %s", sHostName);
+	FormatEx(sServerTags, sizeof(sServerTags), "tags      : %s", sTags);
+	FormatEx(sAdress, sizeof(sAdress), "%d.%d.%d.%d:%d", iServerIP >>> 24 & 255, iServerIP >>> 16 & 255, iServerIP >>> 8 & 255, iServerIP & 255, iServerPort);
+	FormatEx(sServerAdress, sizeof(sServerAdress), "udp/ip  : %s", sAdress);
+
+	if (client == 0 || GetAdminFlag(GetUserAdmin(client), Admin_RCON))
+		bIsAdmin = true;
+
+	if (GetFeatureStatus(FeatureType_Native, "GeoipCode3") == FeatureStatus_Available)
+		bGeoIP = true;
 
 	static char sMapName[128];
 	GetCurrentMap(sMapName, sizeof(sMapName));
 
-	float fPosition[3];
-	float fClientDataIn;
-	float fClientDataOut;
-	float fServerDataIn;
-	float fServerDataOut;
+	float fServerDataIn, fServerDataOut;
+	GetServerNetStats(fServerDataIn, fServerDataOut);
 
+	char sServerData[128], sServerMap[128];
 	if (client > 0)
 	{
+		float fPosition[3];
+		float fClientDataIn, fClientDataOut;
+
 		GetClientAbsOrigin(client, fPosition);
 		fClientDataIn = GetClientAvgData(client, NetFlow_Incoming);
 		fClientDataOut = GetClientAvgData(client, NetFlow_Outgoing);
+
+		FormatEx(sServerData, sizeof(sServerData), "net I/O : %.2f/%.2f KiB/s (You: %.2f/%.2f KiB/s)", fServerDataIn / 1024, fServerDataOut / 1024, fClientDataIn / 1024, fClientDataOut / 1024);
+		FormatEx(sServerMap, sizeof(sServerMap), "map      : %s at: %.0f x, %.0f y, %.0f z", sMapName, fPosition[0], fPosition[1], fPosition[2]);
+	}
+	else
+	{
+		FormatEx(sServerData, sizeof(sServerData), "net I/O : %.2f/%.2f KiB/s", fServerDataIn / 1024, fServerDataOut / 1024);
+		FormatEx(sServerMap, sizeof(sServerMap), "map      : %s", sMapName);
 	}
 
-	GetServerNetStats(fServerDataIn, fServerDataOut);
-
-	int iRealClients;
-	int iFakeClients;
-	int iTotalClients;
-
-	for(int player = 1; player <= MaxClients; player++)
+	int iRealClients, iFakeClients, iTotalClients;
+	for (int player = 1; player <= MaxClients; player++)
 	{
-		if(IsClientConnected(player))
+		if (IsClientConnected(player))
 		{
 			iTotalClients++;
 
-			if(IsFakeClient(player))
+			if (IsFakeClient(player))
 				iFakeClients++;
 			else
 				iRealClients++;
 		}
 	}
 
-	bool bIsAdmin = client == 0 || GetAdminFlag(GetUserAdmin(client), Admin_RCON);
+	char sServerPlayers[128];
+	FormatEx(sServerPlayers, sizeof(sServerPlayers), "players : %d %s | %d %s (%d/%d)", 
+		iRealClients, Multiple(iRealClients) ? "humans" : "human", iFakeClients, Multiple(iFakeClients) ? "bots" : "bot", iTotalClients, MaxClients);
 
-	bool bGeoIP = false;
-	if (GetFeatureStatus(FeatureType_Native, "GeoipCode3") == FeatureStatus_Available)
-		bGeoIP = true;
-
+	char sServerTickRate[128];
 #if defined _serverfps_included
+
 	float fServerTickRate = 1.0 / GetTickInterval();
 	float fServerFPS = GetServerFPS();
-
 	fServerFPS = fServerFPS <= fServerTickRate ? fServerFPS : fServerTickRate;
+
+	FormatEx(sServerTickRate, sizeof(sServerTickRate), "tickrate : %.2f/%.2f (%d%%)", fServerFPS, fServerTickRate, RoundToNearest((fServerFPS / fServerTickRate) * 100));
 #else
 	int iServerTickRate = RoundToZero(1.0 / GetTickInterval());
 	int iTickRate = g_iTickRate;
-
 	iTickRate = iTickRate <= iServerTickRate ? iTickRate : iServerTickRate;
+
+	FormatEx(sServerTickRate, sizeof(sServerTickRate), "tickrate : %d/%d (%d%%)", iTickRate, iServerTickRate, RoundToNearest((float(iTickRate) / float(iServerTickRate)) * 100));
 #endif
 
-	PrintToConsole(client, "hostname: %s", sServerName);
+	char sServerEdicts[128];
+	int iMaxEdicts = GetMaxEntities();
+	int iUsedEdicts = GetEntityCount();
+	FormatEx(sServerEdicts, sizeof(sServerEdicts), "edicts : %d/%d/%d (used/max/free)", iUsedEdicts, iMaxEdicts, iMaxEdicts - iUsedEdicts);
 
-#if defined _serverfps_included
-	PrintToConsole(client, "tickrate : %.2f/%.2f (%d%%)",
-		fServerFPS, fServerTickRate, RoundToNearest((fServerFPS / fServerTickRate) * 100));
-#else
-	PrintToConsole(client, "tickrate : %d/%d (%d%%)",
-		iTickRate, iServerTickRate, RoundToNearest((float(iTickRate) / float(iServerTickRate)) * 100));
-#endif
+	// Build Header + Content title
+	char sHeader[2048];
+	FormatEx(sHeader, sizeof(sHeader), "%s \n%s \n%s \n%s \n%s \n%s \n%s \n%s", 
+		sServerName, sServerTickRate, sServerAdress, sServerData, sServerMap, sServerTags, sServerEdicts, sServerPlayers);
 
-	PrintToConsole(client, "udp/ip  : %s", sServerAdress);
+	char sTitle[256];
+	FormatEx(sTitle, sizeof(sTitle), "# %8s %40s %24s %12s %4s %4s %7s %12s %s", "userid", "name", "uniqueid", "connected", "ping", "loss", "state", "addr", "country");
 
-	if (client > 0)
+	PrintToConsole(client, "%s \n%s", sHeader, sTitle);
+
+	for (int player = 1; player <= MaxClients; player++)
 	{
-		PrintToConsole(client, "net I/O : %.2f/%.2f KiB/s (You: %.2f/%.2f KiB/s)",
-			fServerDataIn / 1024, fServerDataOut / 1024, fClientDataIn / 1024, fClientDataOut / 1024);
-
-		PrintToConsole(client, "map      : %s at: %.0f x, %.0f y, %.0f z",
-			sMapName, fPosition[0], fPosition[1], fPosition[2]);
-	}
-	else
-		PrintToConsole(client, "map      : %s", sMapName);
-
-	PrintToConsole(client, "tags      : %s", sServerTags);
-
-	PrintToConsole(client, "edicts : %d/%d/%d (used/max/free)",
-		GetEntityCount(), GetMaxEntities(), GetMaxEntities() - GetEntityCount());
-
-	PrintToConsole(client, "players : %d %s | %d %s (%d/%d)",
-		iRealClients, Multiple(iRealClients) ? "humans" : "human", iFakeClients, Multiple(iFakeClients) ? "bots" : "bot", iTotalClients, MaxClients);
-
-	PrintToConsole(client, "# %8s %40s %24s %12s %4s %4s %s %s",
-		"userid", "name", "uniqueid", "connected", "ping", "loss", "state", "addr");
-
-	for(int player = 1; player <= MaxClients; player++)
-	{
-		if(!IsClientConnected(player))
+		if (!IsClientConnected(player))
 			continue;
 
 		static char sPlayerID[8];
@@ -155,14 +153,15 @@ public Action Command_Status(int client, const char[] command, int args)
 		char sPlayerLoss[4];
 		static char sPlayerState[16];
 		char sPlayerAddr[32];
+		char sGeoIP[4];
 
 		FormatEx(sPlayerID, sizeof(sPlayerID), "%d", GetClientUserId(player));
 		FormatEx(sPlayerName, sizeof(sPlayerName), "\"%N\"", player);
 
-		if(!GetClientAuthId(player, AuthId_Steam2, sPlayerAuth, sizeof(sPlayerAuth)))
+		if (!GetClientAuthId(player, AuthId_Steam2, sPlayerAuth, sizeof(sPlayerAuth)))
 			FormatEx(sPlayerAuth, sizeof(sPlayerAuth), "STEAM_ID_PENDING");
 
-		if(!IsFakeClient(player))
+		if (!IsFakeClient(player))
 		{
 			int iHours   = RoundToFloor((GetClientTime(player) / 3600));
 			int iMinutes = RoundToFloor((GetClientTime(player) - (iHours * 3600)) / 60);
@@ -177,7 +176,7 @@ public Action Command_Status(int client, const char[] command, int args)
 			FormatEx(sPlayerLoss, sizeof(sPlayerLoss), "%d", RoundFloat(GetClientAvgLoss(player, NetFlow_Outgoing) * 100));
 		}
 
-		if(IsClientInGame(player))
+		if (IsClientInGame(player))
 		{
 			if (SteamClientAuthenticated(sPlayerAuth))	
 				FormatEx(sPlayerState, sizeof(sPlayerState), "active");	
@@ -187,29 +186,22 @@ public Action Command_Status(int client, const char[] command, int args)
 		else
 			FormatEx(sPlayerState, sizeof(sPlayerState), "spawning");
 
-		if(bIsAdmin)
-		{
+		if (bIsAdmin && !IsFakeClient(player))
 			GetClientIP(player, sPlayerAddr, sizeof(sPlayerAddr));
-			if(bGeoIP)
-			{
-				char sGeoIP[4];
-				if (!GeoipCode3(sPlayerAddr, sGeoIP))
-					sGeoIP = "??";
 
-				FormatEx(sPlayerAddr, sizeof(sPlayerAddr), "%s [%s]", sPlayerAddr, sGeoIP);
-			}
-		}
+		if (bGeoIP && !IsFakeClient(player) && !GeoipCode3(sPlayerAddr, sGeoIP))
+			sGeoIP = "N/A";
 
-		PrintToConsole(client, "# %8s %40s %24s %12s %4s %4s %s %s",
-			sPlayerID, sPlayerName, sPlayerAuth, sPlayerTime, sPlayerPing, sPlayerLoss, sPlayerState, bIsAdmin ? sPlayerAddr : "Private");
+		PrintToConsole(client, "# %8s %40s %24s %12s %4s %4s %7s %12s %s",
+			sPlayerID, sPlayerName, sPlayerAuth, sPlayerTime, sPlayerPing, sPlayerLoss, sPlayerState, bIsAdmin ? sPlayerAddr : "Private", sGeoIP);
 	}
 
 	return Plugin_Handled;
 }
 
+#if !defined _serverfps_included //Inaccurate fallback
 public void OnGameFrame()
 {
-#if !defined _serverfps_included //Inaccurate fallback
 	static float fLastEngineTime;
 	static int iTicks;
 	float fCurEngineTime = GetEngineTime(); //GetEngineTime() will become less and less accurate as server uptime goes up!
@@ -222,8 +214,8 @@ public void OnGameFrame()
 		iTicks = 0;
 		fLastEngineTime = fCurEngineTime;
 	}
-#endif
 }
+#endif
 
 stock bool Multiple(int num)
 {
