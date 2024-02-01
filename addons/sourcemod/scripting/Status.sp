@@ -153,7 +153,7 @@ public Action Command_Status(int client, const char[] command, int args)
 		char sPlayerLoss[4];
 		static char sPlayerState[16];
 		char sPlayerAddr[32];
-		char sGeoIP[4];
+		char sGeoIP[4] = "N/A";
 
 		FormatEx(sPlayerID, sizeof(sPlayerID), "%d", GetClientUserId(player));
 		FormatEx(sPlayerName, sizeof(sPlayerName), "\"%N\"", player);
@@ -189,8 +189,8 @@ public Action Command_Status(int client, const char[] command, int args)
 		if (bIsAdmin && !IsFakeClient(player))
 			GetClientIP(player, sPlayerAddr, sizeof(sPlayerAddr));
 
-		if (bGeoIP && !IsFakeClient(player) && !GeoipCode3(sPlayerAddr, sGeoIP))
-			sGeoIP = "N/A";
+		if (bGeoIP && !IsFakeClient(player))
+			GeoipCode3(sPlayerAddr, sGeoIP);
 
 		PrintToConsole(client, "# %8s %40s %24s %12s %4s %4s %7s %12s %s",
 			sPlayerID, sPlayerName, sPlayerAuth, sPlayerTime, sPlayerPing, sPlayerLoss, sPlayerState, bIsAdmin ? sPlayerAddr : "Private", sGeoIP);
