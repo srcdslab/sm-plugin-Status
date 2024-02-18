@@ -2,9 +2,9 @@
 
 #include <sourcemod>
 #include <sdktools>
-#include <connect>
 
 #undef REQUIRE_EXTENSIONS
+#tryinclude <connect>
 #tryinclude <geoip>
 #tryinclude "serverfps.inc"
 #define REQUIRE_EXTENSIONS
@@ -25,7 +25,7 @@ public Plugin myinfo =
 	name         = "Status Fixer",
 	author       = "zaCade + BotoX + Obus + .Rushaway",
 	description  = "Fixes the \"status\" command",
-	version      = "2.1.0",
+	version      = "2.1.1",
 	url          = "https://github.com/srcdslab/sm-plugin-Status"
 };
 
@@ -45,6 +45,11 @@ public Action Command_Status(int client, const char[] command, int args)
 {
 	bool bGeoIP = false;
 	bool bIsAdmin = false;
+
+#if defined _Connect_Included
+	bool bConnect = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
+#endif
+
 	static char sHostName[128], sServerName[256];
 	static char sTags[128], sServerTags[256];
 	static char sAdress[128], sServerAdress[256];
@@ -151,7 +156,7 @@ public Action Command_Status(int client, const char[] command, int args)
 		char sPlayerTime[12];
 		char sPlayerPing[4];
 		char sPlayerLoss[4];
-		static char sPlayerState[16];
+		static char sPlayerState[16] = "spawning";
 		char sPlayerAddr[32];
 		char sGeoIP[4] = "N/A";
 
@@ -176,15 +181,17 @@ public Action Command_Status(int client, const char[] command, int args)
 			FormatEx(sPlayerLoss, sizeof(sPlayerLoss), "%d", RoundFloat(GetClientAvgLoss(player, NetFlow_Outgoing) * 100));
 		}
 
-		if (IsClientInGame(player))
+		if (IsClientInGame(player) && !IsFakeClient(player))
 		{
-			if (SteamClientAuthenticated(sPlayerAuth))	
-				FormatEx(sPlayerState, sizeof(sPlayerState), "active");	
-			else	
+		#if defined _Connect_Included
+			if (bConnect && SteamClientAuthenticated(sPlayerAuth))	
+				FormatEx(sPlayerState, sizeof(sPlayerState), "active");
+			else
 				FormatEx(sPlayerState, sizeof(sPlayerState), "nosteam");
+		#else
+			FormatEx(sPlayerState, sizeof(sPlayerState), "active");
+		#endif
 		}
-		else
-			FormatEx(sPlayerState, sizeof(sPlayerState), "spawning");
 
 		if (bIsAdmin && !IsFakeClient(player))
 			GetClientIP(player, sPlayerAddr, sizeof(sPlayerAddr));
