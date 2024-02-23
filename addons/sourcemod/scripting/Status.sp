@@ -25,7 +25,7 @@ public Plugin myinfo =
 	name         = "Status Fixer",
 	author       = "zaCade + BotoX + Obus + .Rushaway",
 	description  = "Fixes the \"status\" command",
-	version      = "2.1.1",
+	version      = "2.1.2",
 	url          = "https://github.com/srcdslab/sm-plugin-Status"
 };
 
@@ -45,10 +45,7 @@ public Action Command_Status(int client, const char[] command, int args)
 {
 	bool bGeoIP = false;
 	bool bIsAdmin = false;
-
-#if defined _Connect_Included
 	bool bConnect = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
-#endif
 
 	static char sHostName[128], sServerName[256];
 	static char sTags[128], sServerTags[256];
@@ -181,10 +178,10 @@ public Action Command_Status(int client, const char[] command, int args)
 			FormatEx(sPlayerLoss, sizeof(sPlayerLoss), "%d", RoundFloat(GetClientAvgLoss(player, NetFlow_Outgoing) * 100));
 		}
 
-		if (IsClientInGame(player) && !IsFakeClient(player))
+		if (IsClientInGame(player))
 		{
 		#if defined _Connect_Included
-			if (bConnect && SteamClientAuthenticated(sPlayerAuth))	
+			if (!bConnect || (bConnect && SteamClientAuthenticated(sPlayerAuth)))	
 				FormatEx(sPlayerState, sizeof(sPlayerState), "active");
 			else
 				FormatEx(sPlayerState, sizeof(sPlayerState), "nosteam");
