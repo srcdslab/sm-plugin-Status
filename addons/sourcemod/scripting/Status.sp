@@ -11,6 +11,7 @@
 
 #pragma newdecls required
 
+ConVar g_Cvar_AuthIdType;
 ConVar g_Cvar_HostIP;
 ConVar g_Cvar_HostPort;
 ConVar g_Cvar_HostName;
@@ -25,13 +26,16 @@ public Plugin myinfo =
 	name         = "Status Fixer",
 	author       = "zaCade + BotoX + Obus + .Rushaway",
 	description  = "Fixes the \"status\" command",
-	version      = "2.1.2",
+	version      = "2.1.3",
 	url          = "https://github.com/srcdslab/sm-plugin-Status"
 };
 
 public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
+
+	g_Cvar_AuthIdType = CreateConVar("status_authid_type", "1", "AuthID type used [0 = Engine, 1 = Steam2, 2 = Steam3, 3 = Steam64]", FCVAR_NONE, true, 0.0, true, 3.0);
+	AutoExecConfig(true);
 	
 	g_Cvar_HostIP   = FindConVar("hostip");
 	g_Cvar_HostPort = FindConVar("hostport");
@@ -160,7 +164,8 @@ public Action Command_Status(int client, const char[] command, int args)
 		FormatEx(sPlayerID, sizeof(sPlayerID), "%d", GetClientUserId(player));
 		FormatEx(sPlayerName, sizeof(sPlayerName), "\"%N\"", player);
 
-		if (!GetClientAuthId(player, AuthId_Steam2, sPlayerAuth, sizeof(sPlayerAuth)))
+		AuthIdType authType = view_as<AuthIdType>(g_Cvar_AuthIdType.IntValue);
+		if (!GetClientAuthId(player, authType, sPlayerAuth, sizeof(sPlayerAuth)))
 			FormatEx(sPlayerAuth, sizeof(sPlayerAuth), "STEAM_ID_PENDING");
 
 		if (!IsFakeClient(player))
