@@ -34,7 +34,7 @@ public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
 
-	g_Cvar_AuthIdType = CreateConVar("status_authid_type", "1", "AuthID type used [0 = Engine, 1 = Steam2, 2 = Steam3, 3 = Steam64]", FCVAR_NONE, true, 0.0, true, 3.0);
+	g_Cvar_AuthIdType = CreateConVar("sm_status_authid_type", "1", "AuthID type used [0 = Engine, 1 = Steam2, 2 = Steam3, 3 = Steam64]", FCVAR_NONE, true, 0.0, true, 3.0);
 	AutoExecConfig(true);
 	
 	g_Cvar_HostIP   = FindConVar("hostip");
