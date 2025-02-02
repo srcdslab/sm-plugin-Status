@@ -4,10 +4,13 @@
 #include <sdktools>
 
 #undef REQUIRE_EXTENSIONS
-#tryinclude <connect>
 #tryinclude <geoip>
 #tryinclude "serverfps.inc"
 #define REQUIRE_EXTENSIONS
+
+#undef REQUIRE_PLUGIN
+#tryinclude <PlayerManager>
+#define REQUIRE_PLUGIN
 
 #pragma newdecls required
 
@@ -26,7 +29,7 @@ public Plugin myinfo =
 	name         = "Status Fixer",
 	author       = "zaCade + BotoX + Obus + .Rushaway",
 	description  = "Fixes the \"status\" command",
-	version      = "2.1.3",
+	version      = "2.1.4",
 	url          = "https://github.com/srcdslab/sm-plugin-Status"
 };
 
@@ -49,7 +52,7 @@ public Action Command_Status(int client, const char[] command, int args)
 {
 	bool bGeoIP = false;
 	bool bIsAdmin = false;
-	bool bConnect = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
+	bool bPlayerManager = GetFeatureStatus(FeatureType_Native, "PM_IsPlayerSteam") == FeatureStatus_Available;
 
 	static char sHostName[128], sServerName[256];
 	static char sTags[128], sServerTags[256];
@@ -185,8 +188,8 @@ public Action Command_Status(int client, const char[] command, int args)
 
 		if (IsClientInGame(player))
 		{
-		#if defined _Connect_Included
-			if (!bConnect || (bConnect && SteamClientAuthenticated(sPlayerAuth)))	
+		#if defined _PlayerManager_included
+			if (!bPlayerManager || (bPlayerManager && PM_IsPlayerSteam(player)))	
 				FormatEx(sPlayerState, sizeof(sPlayerState), "active");
 			else
 				FormatEx(sPlayerState, sizeof(sPlayerState), "nosteam");
