@@ -29,7 +29,7 @@ public Plugin myinfo =
 	name         = "Status Fixer",
 	author       = "zaCade + BotoX + Obus + .Rushaway",
 	description  = "Fixes the \"status\" command",
-	version      = "2.1.4",
+	version      = "2.1.5",
 	url          = "https://github.com/srcdslab/sm-plugin-Status"
 };
 
@@ -189,7 +189,7 @@ public Action Command_Status(int client, const char[] command, int args)
 		if (IsClientInGame(player))
 		{
 		#if defined _PlayerManager_included
-			if (!bPlayerManager || (bPlayerManager && PM_IsPlayerSteam(player)))	
+			if (!bPlayerManager || IsFakeClient(player) || (bPlayerManager && PM_IsPlayerSteam(player)))
 				FormatEx(sPlayerState, sizeof(sPlayerState), "active");
 			else
 				FormatEx(sPlayerState, sizeof(sPlayerState), "nosteam");
