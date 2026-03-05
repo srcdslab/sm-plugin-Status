@@ -15,10 +15,20 @@
 #pragma newdecls required
 
 ConVar g_Cvar_AuthIdType;
+ConVar g_Cvar_OrderBy;
 ConVar g_Cvar_HostIP;
 ConVar g_Cvar_HostPort;
 ConVar g_Cvar_HostName;
 ConVar g_Cvar_HostTags;
+
+enum StatusOrderBy
+{
+	StatusOrderBy_UserId = 0,
+	StatusOrderBy_PlayerName,
+	StatusOrderBy_Time,
+	StatusOrderBy_Ping,
+	StatusOrderBy_State
+};
 
 #if !defined _serverfps_included
 int g_iTickRate;
@@ -29,7 +39,7 @@ public Plugin myinfo =
 	name         = "Status Fixer",
 	author       = "zaCade + BotoX + Obus + .Rushaway",
 	description  = "Fixes the \"status\" command",
-	version      = "2.1.7",
+	version      = "2.2.0",
 	url          = "https://github.com/srcdslab/sm-plugin-Status"
 };
 
@@ -38,8 +48,9 @@ public void OnPluginStart()
 	LoadTranslations("common.phrases");
 
 	g_Cvar_AuthIdType = CreateConVar("sm_status_authid_type", "1", "AuthID type used [0 = Engine, 1 = Steam2, 2 = Steam3, 3 = Steam64]", FCVAR_NONE, true, 0.0, true, 3.0);
+	g_Cvar_OrderBy = CreateConVar("sm_status_order_by", "0", "Order player rows by [0 = userid, 1 = playername, 2 = time, 3 = ping, 4 = steam->nosteam->spawning]", FCVAR_NONE, true, 0.0, true, 4.0);
 	AutoExecConfig(true);
-	
+
 	g_Cvar_HostIP   = FindConVar("hostip");
 	g_Cvar_HostPort = FindConVar("hostport");
 	g_Cvar_HostName = FindConVar("hostname");
@@ -115,7 +126,7 @@ public Action Command_Status(int client, const char[] command, int args)
 	}
 
 	char sServerPlayers[128];
-	FormatEx(sServerPlayers, sizeof(sServerPlayers), "players : %d %s | %d %s (%d/%d)", 
+	FormatEx(sServerPlayers, sizeof(sServerPlayers), "players : %d %s | %d %s (%d/%d)",
 		iRealClients, Multiple(iRealClients) ? "humans" : "human", iFakeClients, Multiple(iFakeClients) ? "bots" : "bot", iTotalClients, MaxClients);
 
 	char sServerTickRate[128];
@@ -141,7 +152,7 @@ public Action Command_Status(int client, const char[] command, int args)
 
 	// Build Header + Content title
 	char sHeader[2048];
-	FormatEx(sHeader, sizeof(sHeader), "%s \n%s \n%s \n%s \n%s \n%s \n%s \n%s", 
+	FormatEx(sHeader, sizeof(sHeader), "%s \n%s \n%s \n%s \n%s \n%s \n%s \n%s",
 		sServerName, sServerTickRate, sServerAdress, sServerData, sServerMap, sServerTags, sServerEdicts, sServerPlayers);
 
 	char sTitle[256];
@@ -149,18 +160,30 @@ public Action Command_Status(int client, const char[] command, int args)
 
 	PrintToConsole(client, "%s \n%s", sHeader, sTitle);
 
+	int iPlayers[MAXPLAYERS + 1];
+	int iPlayerCount;
+
 	for (int player = 1; player <= MaxClients; player++)
 	{
 		if (!IsClientConnected(player))
 			continue;
 
+		iPlayers[iPlayerCount++] = player;
+	}
+
+	SortPlayers(iPlayers, iPlayerCount, view_as<StatusOrderBy>(g_Cvar_OrderBy.IntValue), bPlayerManager);
+
+	for (int i = 0; i < iPlayerCount; i++)
+	{
+		int player = iPlayers[i];
+
 		static char sPlayerID[8];
 		static char sPlayerName[MAX_NAME_LENGTH + 2];
 		static char sPlayerAuth[24];
 		char sPlayerTime[12];
-		char sPlayerPing[4];
-		char sPlayerLoss[4];
-		static char sPlayerState[16] = "spawning";
+		char sPlayerPing[8];
+		char sPlayerLoss[8];
+		char sPlayerState[16];
 		char sPlayerAddr[32];
 		char sGeoIP[4] = "N/A";
 
@@ -187,17 +210,7 @@ public Action Command_Status(int client, const char[] command, int args)
 			FormatEx(sPlayerLoss, sizeof(sPlayerLoss), "%d", RoundFloat(GetClientAvgLoss(player, NetFlow_Outgoing) * 100));
 		}
 
-		if (IsClientInGame(player))
-		{
-		#if defined _PlayerManager_included
-			if (!bPlayerManager || IsFakeClient(player) || (bPlayerManager && PM_IsPlayerSteam(player)))
-				FormatEx(sPlayerState, sizeof(sPlayerState), "active");
-			else
-				FormatEx(sPlayerState, sizeof(sPlayerState), "nosteam");
-		#else
-			FormatEx(sPlayerState, sizeof(sPlayerState), "active");
-		#endif
-		}
+		GetPlayerStateLabel(player, bPlayerManager, sPlayerState, sizeof(sPlayerState));
 
 		if (bIsAdmin && !IsFakeClient(player))
 			GetClientIP(player, sPlayerAddr, sizeof(sPlayerAddr));
@@ -210,6 +223,111 @@ public Action Command_Status(int client, const char[] command, int args)
 	}
 
 	return Plugin_Handled;
+}
+
+void SortPlayers(int[] players, int count, StatusOrderBy orderBy, bool bPlayerManager)
+{
+	for (int i = 0; i < count - 1; i++)
+	{
+		for (int j = i + 1; j < count; j++)
+		{
+			if (!ShouldPlayerComeBefore(players[j], players[i], orderBy, bPlayerManager))
+				continue;
+
+			int temp = players[i];
+			players[i] = players[j];
+			players[j] = temp;
+		}
+	}
+}
+
+bool ShouldPlayerComeBefore(int candidatePlayer, int currentPlayer, StatusOrderBy orderBy, bool bPlayerManager)
+{
+	switch (orderBy)
+	{
+		case StatusOrderBy_PlayerName:
+		{
+			char candidateName[MAX_NAME_LENGTH];
+			char currentName[MAX_NAME_LENGTH];
+
+			GetClientName(candidatePlayer, candidateName, sizeof(candidateName));
+			GetClientName(currentPlayer, currentName, sizeof(currentName));
+
+			int compare = strcmp(candidateName, currentName, false);
+			if (compare < 0)
+				return true;
+
+			if (compare > 0)
+				return false;
+		}
+		case StatusOrderBy_Time:
+		{
+			float candidateTime = GetClientTime(candidatePlayer);
+			float currentTime = GetClientTime(currentPlayer);
+
+			if (candidateTime > currentTime)
+				return true;
+
+			if (candidateTime < currentTime)
+				return false;
+		}
+		case StatusOrderBy_Ping:
+		{
+			int candidatePing = IsFakeClient(candidatePlayer) ? 9999 : RoundFloat(GetClientLatency(candidatePlayer, NetFlow_Outgoing) * 1000.0);
+			int currentPing = IsFakeClient(currentPlayer) ? 9999 : RoundFloat(GetClientLatency(currentPlayer, NetFlow_Outgoing) * 1000.0);
+
+			if (candidatePing < currentPing)
+				return true;
+
+			if (candidatePing > currentPing)
+				return false;
+		}
+		case StatusOrderBy_State:
+		{
+			int candidateState = GetPlayerStateSortRank(candidatePlayer, bPlayerManager);
+			int currentState = GetPlayerStateSortRank(currentPlayer, bPlayerManager);
+
+			if (candidateState < currentState)
+				return true;
+
+			if (candidateState > currentState)
+				return false;
+		}
+	}
+
+	return GetClientUserId(candidatePlayer) < GetClientUserId(currentPlayer);
+}
+
+int GetPlayerStateSortRank(int player, bool bPlayerManager)
+{
+	if (!IsClientInGame(player))
+		return 2;
+
+#if defined _PlayerManager_included
+	if (bPlayerManager && !IsFakeClient(player) && !PM_IsPlayerSteam(player))
+		return 1;
+#endif
+
+	return 0;
+}
+
+void GetPlayerStateLabel(int player, bool bPlayerManager, char[] buffer, int maxlen)
+{
+	if (!IsClientInGame(player))
+	{
+		FormatEx(buffer, maxlen, "spawning");
+		return;
+	}
+
+#if defined _PlayerManager_included
+	if (bPlayerManager && !IsFakeClient(player) && !PM_IsPlayerSteam(player))
+	{
+		FormatEx(buffer, maxlen, "nosteam");
+		return;
+	}
+#endif
+
+	FormatEx(buffer, maxlen, "active");
 }
 
 #if !defined _serverfps_included //Inaccurate fallback
