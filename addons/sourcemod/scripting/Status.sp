@@ -212,7 +212,7 @@ public Action Command_Status(int client, const char[] command, int args)
 
 		GetPlayerStateLabel(player, bPlayerManager, sPlayerState, sizeof(sPlayerState));
 
-		if (!IsFakeClient(player))	
+		if (bIsAdmin && !IsFakeClient(player))	
 			GetClientIP(player, sPlayerAddr, sizeof(sPlayerAddr));
 
 		if (bGeoIP && !IsFakeClient(player))
