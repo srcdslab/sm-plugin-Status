@@ -29,7 +29,7 @@ public Plugin myinfo =
 	name         = "Status Fixer",
 	author       = "zaCade + BotoX + Obus + .Rushaway",
 	description  = "Fixes the \"status\" command",
-	version      = "2.1.5",
+	version      = "2.1.6",
 	url          = "https://github.com/srcdslab/sm-plugin-Status"
 };
 
@@ -173,9 +173,10 @@ public Action Command_Status(int client, const char[] command, int args)
 
 		if (!IsFakeClient(player))
 		{
-			int iHours   = RoundToFloor((GetClientTime(player) / 3600));
-			int iMinutes = RoundToFloor((GetClientTime(player) - (iHours * 3600)) / 60);
-			int iSeconds = RoundToFloor((GetClientTime(player) - (iHours * 3600)) - (iMinutes * 60));
+			float fTime = GetClientTime(player);
+			int iHours   = RoundToFloor((fTime / 3600));
+			int iMinutes = RoundToFloor((fTime - (iHours * 3600)) / 60);
+			int iSeconds = RoundToFloor((fTime - (iHours * 3600)) - (iMinutes * 60));
 
 			if (iHours)
 				FormatEx(sPlayerTime, sizeof(sPlayerTime), "%d:%02d:%02d", iHours, iMinutes, iSeconds);
