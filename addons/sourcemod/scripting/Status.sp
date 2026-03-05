@@ -50,7 +50,7 @@ public void OnPluginStart()
 	g_Cvar_AuthIdType = CreateConVar("sm_status_authid_type", "1", "AuthID type used [0 = Engine, 1 = Steam2, 2 = Steam3, 3 = Steam64]", FCVAR_NONE, true, 0.0, true, 3.0);
 	g_Cvar_OrderBy = CreateConVar("sm_status_order_by", "0", "Order player rows by [0 = userid, 1 = playername, 2 = time, 3 = ping, 4 = steam->nosteam->spawning]", FCVAR_NONE, true, 0.0, true, 4.0);
 	AutoExecConfig(true);
-	
+
 	g_Cvar_HostIP   = FindConVar("hostip");
 	g_Cvar_HostPort = FindConVar("hostport");
 	g_Cvar_HostName = FindConVar("hostname");
@@ -126,7 +126,7 @@ public Action Command_Status(int client, const char[] command, int args)
 	}
 
 	char sServerPlayers[128];
-	FormatEx(sServerPlayers, sizeof(sServerPlayers), "players : %d %s | %d %s (%d/%d)", 
+	FormatEx(sServerPlayers, sizeof(sServerPlayers), "players : %d %s | %d %s (%d/%d)",
 		iRealClients, Multiple(iRealClients) ? "humans" : "human", iFakeClients, Multiple(iFakeClients) ? "bots" : "bot", iTotalClients, MaxClients);
 
 	char sServerTickRate[128];
@@ -152,7 +152,7 @@ public Action Command_Status(int client, const char[] command, int args)
 
 	// Build Header + Content title
 	char sHeader[2048];
-	FormatEx(sHeader, sizeof(sHeader), "%s \n%s \n%s \n%s \n%s \n%s \n%s \n%s", 
+	FormatEx(sHeader, sizeof(sHeader), "%s \n%s \n%s \n%s \n%s \n%s \n%s \n%s",
 		sServerName, sServerTickRate, sServerAdress, sServerData, sServerMap, sServerTags, sServerEdicts, sServerPlayers);
 
 	char sTitle[256];
@@ -212,7 +212,7 @@ public Action Command_Status(int client, const char[] command, int args)
 
 		GetPlayerStateLabel(player, bPlayerManager, sPlayerState, sizeof(sPlayerState));
 
-		if (bIsAdmin && !IsFakeClient(player))	
+		if (bIsAdmin && !IsFakeClient(player))
 			GetClientIP(player, sPlayerAddr, sizeof(sPlayerAddr));
 
 		if (bGeoIP && !IsFakeClient(player))
