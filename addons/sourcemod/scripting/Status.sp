@@ -112,18 +112,19 @@ public Action Command_Status(int client, const char[] command, int args)
 		FormatEx(sServerMap,  sizeof(sServerMap),  "map      : %s", sMapName);
 	}
 
+	int iPlayers[MAXPLAYERS + 1];
 	int iRealClients, iFakeClients, iTotalClients;
 	for (int iPlayer = 1; iPlayer <= MaxClients; iPlayer++)
 	{
-		if (IsClientConnected(iPlayer))
-		{
-			iTotalClients++;
+		if (!IsClientConnected(iPlayer))
+			continue;
 
-			if (IsFakeClient(iPlayer))
-				iFakeClients++;
-			else
-				iRealClients++;
-		}
+		if (IsFakeClient(iPlayer))
+			iFakeClients++;
+		else
+			iRealClients++;
+
+		iPlayers[iTotalClients++] = iPlayer;
 	}
 
 	char sServerPlayers[128];
@@ -177,22 +178,11 @@ public Action Command_Status(int client, const char[] command, int args)
 
 	PrintToConsole(client, "%s \n%s", sHeader, sTitle);
 
-	int iPlayers[MAXPLAYERS + 1];
-	int iPlayerCount;
-
-	for (int iPlayer = 1; iPlayer <= MaxClients; iPlayer++)
-	{
-		if (!IsClientConnected(iPlayer))
-			continue;
-
-		iPlayers[iPlayerCount++] = iPlayer;
-	}
-
-	SortPlayers(iPlayers, iPlayerCount, view_as<StatusOrderBy>(g_Cvar_OrderBy.IntValue), bPlayerManager);
+	SortPlayers(iPlayers, iTotalClients, view_as<StatusOrderBy>(g_Cvar_OrderBy.IntValue), bPlayerManager);
 
 	AuthIdType eAuthType = view_as<AuthIdType>(g_Cvar_AuthIdType.IntValue);
 
-	for (int i = 0; i < iPlayerCount; i++)
+	for (int i = 0; i < iTotalClients; i++)
 	{
 		int iPlayer = iPlayers[i];
 
