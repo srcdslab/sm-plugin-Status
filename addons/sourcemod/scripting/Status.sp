@@ -30,6 +30,13 @@ enum StatusOrderBy
 	StatusOrderBy_State
 };
 
+static int   s_iSortUserIds  [MAXPLAYERS + 1];
+static char  s_sSortNames    [MAXPLAYERS + 1][MAX_NAME_LENGTH];
+static float s_fSortTimes    [MAXPLAYERS + 1];
+static int   s_iSortPings    [MAXPLAYERS + 1];
+static int   s_iSortStates   [MAXPLAYERS + 1];
+static StatusOrderBy s_eSortOrderBy;
+
 #if !defined _serverfps_included
 int g_iTickRate;
 #endif
@@ -61,8 +68,8 @@ public void OnPluginStart()
 
 public Action Command_Status(int client, const char[] command, int args)
 {
-	bool bGeoIP = false;
-	bool bIsAdmin = false;
+	bool bGeoIP = GetFeatureStatus(FeatureType_Native, "GeoipCode3") == FeatureStatus_Available;
+	bool bIsAdmin = (!client || GetAdminFlag(GetUserAdmin(client), Admin_RCON));
 	bool bPlayerManager = GetFeatureStatus(FeatureType_Native, "PM_IsPlayerSteam") == FeatureStatus_Available;
 
 	static char sHostName[128], sServerName[256];
@@ -75,16 +82,10 @@ public Action Command_Status(int client, const char[] command, int args)
 	g_Cvar_HostName.GetString(sHostName, sizeof(sHostName));
 	g_Cvar_HostTags.GetString(sTags, sizeof(sTags));
 
-	FormatEx(sServerName, sizeof(sServerName), "hostname: %s", sHostName);
-	FormatEx(sServerTags, sizeof(sServerTags), "tags      : %s", sTags);
-	FormatEx(sAdress, sizeof(sAdress), "%d.%d.%d.%d:%d", iServerIP >>> 24 & 255, iServerIP >>> 16 & 255, iServerIP >>> 8 & 255, iServerIP & 255, iServerPort);
-	FormatEx(sServerAdress, sizeof(sServerAdress), "udp/ip  : %s", sAdress);
-
-	if (client == 0 || GetAdminFlag(GetUserAdmin(client), Admin_RCON))
-		bIsAdmin = true;
-
-	if (GetFeatureStatus(FeatureType_Native, "GeoipCode3") == FeatureStatus_Available)
-		bGeoIP = true;
+	FormatEx(sServerName,   sizeof(sServerName),   "hostname: %s", sHostName);
+	FormatEx(sServerTags,   sizeof(sServerTags),   "tags      : %s", sTags);
+	FormatEx(sAdress,       sizeof(sAdress),        "%d.%d.%d.%d:%d", iServerIP >>> 24 & 255, iServerIP >>> 16 & 255, iServerIP >>> 8 & 255, iServerIP & 255, iServerPort);
+	FormatEx(sServerAdress, sizeof(sServerAdress),  "udp/ip  : %s", sAdress);
 
 	static char sMapName[128];
 	GetCurrentMap(sMapName, sizeof(sMapName));
@@ -99,26 +100,26 @@ public Action Command_Status(int client, const char[] command, int args)
 		float fClientDataIn, fClientDataOut;
 
 		GetClientAbsOrigin(client, fPosition);
-		fClientDataIn = GetClientAvgData(client, NetFlow_Incoming);
+		fClientDataIn  = GetClientAvgData(client, NetFlow_Incoming);
 		fClientDataOut = GetClientAvgData(client, NetFlow_Outgoing);
 
 		FormatEx(sServerData, sizeof(sServerData), "net I/O : %.2f/%.2f KiB/s (You: %.2f/%.2f KiB/s)", fServerDataIn / 1024, fServerDataOut / 1024, fClientDataIn / 1024, fClientDataOut / 1024);
-		FormatEx(sServerMap, sizeof(sServerMap), "map      : %s at: %.0f x, %.0f y, %.0f z", sMapName, fPosition[0], fPosition[1], fPosition[2]);
+		FormatEx(sServerMap,  sizeof(sServerMap),  "map      : %s at: %.0f x, %.0f y, %.0f z", sMapName, fPosition[0], fPosition[1], fPosition[2]);
 	}
 	else
 	{
 		FormatEx(sServerData, sizeof(sServerData), "net I/O : %.2f/%.2f KiB/s", fServerDataIn / 1024, fServerDataOut / 1024);
-		FormatEx(sServerMap, sizeof(sServerMap), "map      : %s", sMapName);
+		FormatEx(sServerMap,  sizeof(sServerMap),  "map      : %s", sMapName);
 	}
 
 	int iRealClients, iFakeClients, iTotalClients;
-	for (int player = 1; player <= MaxClients; player++)
+	for (int iPlayer = 1; iPlayer <= MaxClients; iPlayer++)
 	{
-		if (IsClientConnected(player))
+		if (IsClientConnected(iPlayer))
 		{
 			iTotalClients++;
 
-			if (IsFakeClient(player))
+			if (IsFakeClient(iPlayer))
 				iFakeClients++;
 			else
 				iRealClients++;
@@ -131,55 +132,73 @@ public Action Command_Status(int client, const char[] command, int args)
 
 	char sServerTickRate[128];
 #if defined _serverfps_included
-
 	float fServerTickRate = 1.0 / GetTickInterval();
-	float fServerFPS = GetServerFPS();
+	float fServerFPS      = GetServerFPS();
 	fServerFPS = fServerFPS <= fServerTickRate ? fServerFPS : fServerTickRate;
 
 	FormatEx(sServerTickRate, sizeof(sServerTickRate), "tickrate : %.2f/%.2f (%d%%)", fServerFPS, fServerTickRate, RoundToNearest((fServerFPS / fServerTickRate) * 100));
 #else
 	int iServerTickRate = RoundToZero(1.0 / GetTickInterval());
-	int iTickRate = g_iTickRate;
+	int iTickRate       = g_iTickRate;
 	iTickRate = iTickRate <= iServerTickRate ? iTickRate : iServerTickRate;
 
 	FormatEx(sServerTickRate, sizeof(sServerTickRate), "tickrate : %d/%d (%d%%)", iTickRate, iServerTickRate, RoundToNearest((float(iTickRate) / float(iServerTickRate)) * 100));
 #endif
 
 	char sServerEdicts[128];
-	int iMaxEdicts = GetMaxEntities();
+	int iMaxEdicts  = GetMaxEntities();
 	int iUsedEdicts = GetEntityCount();
 	FormatEx(sServerEdicts, sizeof(sServerEdicts), "edicts : %d/%d/%d (used/max/free)", iUsedEdicts, iMaxEdicts, iMaxEdicts - iUsedEdicts);
 
-	// Build Header + Content title
+	// Build Header
 	char sHeader[2048];
 	FormatEx(sHeader, sizeof(sHeader), "%s \n%s \n%s \n%s \n%s \n%s \n%s \n%s",
 		sServerName, sServerTickRate, sServerAdress, sServerData, sServerMap, sServerTags, sServerEdicts, sServerPlayers);
 
+	// Determine width for the uniqueid column based on the AuthIdType, to ensure proper alignment of the table.
+	int iAuthIdWidth;
+	switch (view_as<AuthIdType>(g_Cvar_AuthIdType.IntValue))
+	{
+		case AuthId_Steam3:
+			iAuthIdWidth = 30;
+
+		default:
+			iAuthIdWidth = 24;
+	}
+
+	// Build formats for title and rows, with dynamic width for the uniqueid column
+	char sTitleFmt[64], sRowFmt[64];
+	FormatEx(sTitleFmt, sizeof(sTitleFmt), "# %%8s %%40s %%-%ds %%12s %%4s %%4s %%7s %%12s %%s", iAuthIdWidth);
+	FormatEx(sRowFmt,   sizeof(sRowFmt),   "# %%8s %%40s %%-%ds %%12s %%4s %%4s %%7s %%12s %%s", iAuthIdWidth);
+
 	char sTitle[256];
-	FormatEx(sTitle, sizeof(sTitle), "# %8s %40s %24s %12s %4s %4s %7s %12s %s", "userid", "name", "uniqueid", "connected", "ping", "loss", "state", "addr", "country");
+	FormatEx(sTitle, sizeof(sTitle), sTitleFmt,
+		"userid", "name", "uniqueid", "connected", "ping", "loss", "state", "addr", "country");
 
 	PrintToConsole(client, "%s \n%s", sHeader, sTitle);
 
 	int iPlayers[MAXPLAYERS + 1];
 	int iPlayerCount;
 
-	for (int player = 1; player <= MaxClients; player++)
+	for (int iPlayer = 1; iPlayer <= MaxClients; iPlayer++)
 	{
-		if (!IsClientConnected(player))
+		if (!IsClientConnected(iPlayer))
 			continue;
 
-		iPlayers[iPlayerCount++] = player;
+		iPlayers[iPlayerCount++] = iPlayer;
 	}
 
 	SortPlayers(iPlayers, iPlayerCount, view_as<StatusOrderBy>(g_Cvar_OrderBy.IntValue), bPlayerManager);
 
+	AuthIdType eAuthType = view_as<AuthIdType>(g_Cvar_AuthIdType.IntValue);
+
 	for (int i = 0; i < iPlayerCount; i++)
 	{
-		int player = iPlayers[i];
+		int iPlayer = iPlayers[i];
 
-		static char sPlayerID[8];
-		static char sPlayerName[MAX_NAME_LENGTH + 2];
-		static char sPlayerAuth[24];
+		char sPlayerID[8];
+		char sPlayerName[MAX_NAME_LENGTH + 2];
+		char sPlayerAuth[32];
 		char sPlayerTime[12];
 		char sPlayerPing[8];
 		char sPlayerLoss[8];
@@ -187,16 +206,15 @@ public Action Command_Status(int client, const char[] command, int args)
 		char sPlayerAddr[32];
 		char sGeoIP[4] = "N/A";
 
-		FormatEx(sPlayerID, sizeof(sPlayerID), "%d", GetClientUserId(player));
-		FormatEx(sPlayerName, sizeof(sPlayerName), "\"%N\"", player);
+		FormatEx(sPlayerID,   sizeof(sPlayerID),   "%d", GetClientUserId(iPlayer));
+		FormatEx(sPlayerName, sizeof(sPlayerName), "\"%N\"", iPlayer);
 
-		AuthIdType authType = view_as<AuthIdType>(g_Cvar_AuthIdType.IntValue);
-		if (!GetClientAuthId(player, authType, sPlayerAuth, sizeof(sPlayerAuth)))
+		if (!GetClientAuthId(iPlayer, eAuthType, sPlayerAuth, sizeof(sPlayerAuth)))
 			FormatEx(sPlayerAuth, sizeof(sPlayerAuth), "STEAM_ID_PENDING");
 
-		if (!IsFakeClient(player))
+		if (!IsFakeClient(iPlayer))
 		{
-			int iTime    = RoundToFloor(GetClientTime(player));
+			int iTime    = RoundToFloor(GetClientTime(iPlayer));
 			int iHours   = iTime / 3600;
 			int iMinutes = (iTime - (iHours * 3600)) / 60;
 			int iSeconds = iTime - (iHours * 3600) - (iMinutes * 60);
@@ -206,96 +224,119 @@ public Action Command_Status(int client, const char[] command, int args)
 			else
 				FormatEx(sPlayerTime, sizeof(sPlayerTime), "%d:%02d", iMinutes, iSeconds);
 
-			FormatEx(sPlayerPing, sizeof(sPlayerPing), "%d", RoundFloat(GetClientLatency(player, NetFlow_Outgoing) * 1000));
-			FormatEx(sPlayerLoss, sizeof(sPlayerLoss), "%d", RoundFloat(GetClientAvgLoss(player, NetFlow_Outgoing) * 100));
+			FormatEx(sPlayerPing, sizeof(sPlayerPing), "%d", RoundFloat(GetClientLatency(iPlayer, NetFlow_Outgoing) * 1000));
+			FormatEx(sPlayerLoss, sizeof(sPlayerLoss), "%d", RoundFloat(GetClientAvgLoss(iPlayer, NetFlow_Outgoing) * 100));
 		}
 
-		GetPlayerStateLabel(player, bPlayerManager, sPlayerState, sizeof(sPlayerState));
+		GetPlayerStateLabel(iPlayer, bPlayerManager, sPlayerState, sizeof(sPlayerState));
 
-		if (bIsAdmin && !IsFakeClient(player))
-			GetClientIP(player, sPlayerAddr, sizeof(sPlayerAddr));
+		if (!IsFakeClient(iPlayer) && (bIsAdmin || bGeoIP))
+			GetClientIP(iPlayer, sPlayerAddr, sizeof(sPlayerAddr));
 
-		if (bGeoIP && !IsFakeClient(player))
+		if (bGeoIP && !IsFakeClient(iPlayer))
 			GeoipCode3(sPlayerAddr, sGeoIP);
 
-		PrintToConsole(client, "# %8s %40s %24s %12s %4s %4s %7s %12s %s",
-			sPlayerID, sPlayerName, sPlayerAuth, sPlayerTime, sPlayerPing, sPlayerLoss, sPlayerState, bIsAdmin ? sPlayerAddr : "Private", sGeoIP);
+		PrintToConsole(client, sRowFmt,
+			sPlayerID, sPlayerName, sPlayerAuth, sPlayerTime, sPlayerPing, sPlayerLoss,
+			sPlayerState, bIsAdmin ? sPlayerAddr : "Private", sGeoIP);
 	}
 
 	return Plugin_Handled;
 }
 
-void SortPlayers(int[] players, int count, StatusOrderBy orderBy, bool bPlayerManager)
+void PrecomputeSortKeys(int[] iPlayers, int iCount, StatusOrderBy eOrderBy, bool bPlayerManager)
 {
-	for (int i = 0; i < count - 1; i++)
-	{
-		for (int j = i + 1; j < count; j++)
-		{
-			if (!ShouldPlayerComeBefore(players[j], players[i], orderBy, bPlayerManager))
-				continue;
+	s_eSortOrderBy = eOrderBy;
 
-			int temp = players[i];
-			players[i] = players[j];
-			players[j] = temp;
+	for (int i = 0; i < iCount; i++)
+	{
+		int iPlayer = iPlayers[i];
+		s_iSortUserIds[i] = GetClientUserId(iPlayer);
+
+		switch (eOrderBy)
+		{
+			case StatusOrderBy_PlayerName:
+				GetClientName(iPlayer, s_sSortNames[i], MAX_NAME_LENGTH);
+
+			case StatusOrderBy_Time:
+				s_fSortTimes[i] = IsFakeClient(iPlayer) ? 0.0 : GetClientTime(iPlayer);
+
+			case StatusOrderBy_Ping:
+				s_iSortPings[i] = IsFakeClient(iPlayer) ? 9999 : RoundFloat(GetClientLatency(iPlayer, NetFlow_Outgoing) * 1000.0);
+
+			case StatusOrderBy_State:
+				s_iSortStates[i] = GetPlayerStateSortRank(iPlayer, bPlayerManager);
 		}
 	}
 }
 
-bool ShouldPlayerComeBefore(int candidatePlayer, int currentPlayer, StatusOrderBy orderBy, bool bPlayerManager)
+public int SortPlayers_Comparator(int iElemA, int iElemB, const int[] iArray, Handle hHandle)
 {
-	switch (orderBy)
+	switch (s_eSortOrderBy)
 	{
+		case StatusOrderBy_UserId:
+		{
+			// Ascending: lowest userid first
+			if (s_iSortUserIds[iElemA] < s_iSortUserIds[iElemB])
+				return -1;
+			if (s_iSortUserIds[iElemA] > s_iSortUserIds[iElemB])
+				return 1;
+		}
 		case StatusOrderBy_PlayerName:
 		{
-			char candidateName[MAX_NAME_LENGTH];
-			char currentName[MAX_NAME_LENGTH];
-
-			GetClientName(candidatePlayer, candidateName, sizeof(candidateName));
-			GetClientName(currentPlayer, currentName, sizeof(currentName));
-
-			int compare = strcmp(candidateName, currentName, false);
-			if (compare < 0)
-				return true;
-
-			if (compare > 0)
-				return false;
+			int iCmp = strcmp(s_sSortNames[iElemA], s_sSortNames[iElemB], false);
+			if (iCmp != 0)
+				return iCmp; // negative → A comes first (ascending)
 		}
 		case StatusOrderBy_Time:
 		{
-			float candidateTime = GetClientTime(candidatePlayer);
-			float currentTime = GetClientTime(currentPlayer);
-
-			if (candidateTime > currentTime)
-				return true;
-
-			if (candidateTime < currentTime)
-				return false;
+			// Descending: longest-connected first
+			if (s_fSortTimes[iElemA] > s_fSortTimes[iElemB])
+				return -1;
+			if (s_fSortTimes[iElemA] < s_fSortTimes[iElemB])
+				return  1;
 		}
 		case StatusOrderBy_Ping:
 		{
-			int candidatePing = IsFakeClient(candidatePlayer) ? 9999 : RoundFloat(GetClientLatency(candidatePlayer, NetFlow_Outgoing) * 1000.0);
-			int currentPing = IsFakeClient(currentPlayer) ? 9999 : RoundFloat(GetClientLatency(currentPlayer, NetFlow_Outgoing) * 1000.0);
-
-			if (candidatePing < currentPing)
-				return true;
-
-			if (candidatePing > currentPing)
-				return false;
+			// Ascending: lowest ping first
+			if (s_iSortPings[iElemA] < s_iSortPings[iElemB])
+				return -1;
+			if (s_iSortPings[iElemA] > s_iSortPings[iElemB])
+				return 1;
 		}
 		case StatusOrderBy_State:
 		{
-			int candidateState = GetPlayerStateSortRank(candidatePlayer, bPlayerManager);
-			int currentState = GetPlayerStateSortRank(currentPlayer, bPlayerManager);
-
-			if (candidateState < currentState)
-				return true;
-
-			if (candidateState > currentState)
-				return false;
+			// Ascending: active first, then nosteam, then spawning
+			if (s_iSortStates[iElemA] < s_iSortStates[iElemB])
+				return -1;
+			if (s_iSortStates[iElemA] > s_iSortStates[iElemB])
+				return 1;
 		}
 	}
+	return 0;
+}
 
-	return GetClientUserId(candidatePlayer) < GetClientUserId(currentPlayer);
+void SortPlayers(int[] iPlayers, int iCount, StatusOrderBy eOrderBy, bool bPlayerManager)
+{
+	if (iCount <= 1)
+		return;
+
+	PrecomputeSortKeys(iPlayers, iCount, eOrderBy, bPlayerManager);
+
+	// Build an index array [0 … iCount-1] that we hand to SortCustom1D.
+	int iIndices[MAXPLAYERS + 1];
+	for (int i = 0; i < iCount; i++)
+		iIndices[i] = i;
+
+	SortCustom1D(iIndices, iCount, SortPlayers_Comparator);
+
+	// Apply the permutation into a temp buffer, then copy back.
+	int iSorted[MAXPLAYERS + 1];
+	for (int i = 0; i < iCount; i++)
+		iSorted[i] = iPlayers[iIndices[i]];
+
+	for (int i = 0; i < iCount; i++)
+		iPlayers[i] = iSorted[i];
 }
 
 int GetPlayerStateSortRank(int player, bool bPlayerManager)
