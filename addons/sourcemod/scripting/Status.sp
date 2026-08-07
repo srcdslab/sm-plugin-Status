@@ -46,7 +46,7 @@ public Plugin myinfo =
 	name         = "Status Fixer",
 	author       = "zaCade + BotoX + Obus + .Rushaway",
 	description  = "Fixes the \"status\" command",
-	version      = "2.2.0",
+	version      = "2.2.1",
 	url          = "https://github.com/srcdslab/sm-plugin-Status"
 };
 
