@@ -33,7 +33,7 @@ stock Handle GetServerFPSConf()
 
 stock Address GetHostTimeFrame()
 {
-	static Address pHostTimeFrame = Address_Null;
+	static Address pHostTimeFrame;
 
 	if (pHostTimeFrame == Address_Null)
 	{
