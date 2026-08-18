@@ -14,9 +14,9 @@ This repository contains **Status Fixer**, a SourceMod plugin that enhances the 
 ## Technical Environment
 
 ### Core Dependencies
-- **SourceMod**: 1.11.0+ (specified in sourceknight.yaml)
+- **SourceMod**: 1.12.x
 - **Language**: SourcePawn
-- **Compiler**: SourceMod Compiler (spcomp) via SourceKnight build system
+- **Compiler**: SourceMod Compiler (spcomp) via GitHub Actions (rumblefrog/setup-sp)
 - **Minimum SourceMod API**: 1.12+ for production deployment
 
 ### Optional Dependencies
@@ -25,9 +25,9 @@ This repository contains **Status Fixer**, a SourceMod plugin that enhances the 
 - **ServerFPS Extension**: For accurate server performance monitoring
 
 ### Build System
-- **Primary**: SourceKnight build tool (configured in `sourceknight.yaml`)
+- **Primary**: Native GitHub Actions workflow (`.github/workflows/ci.yml`), using `rumblefrog/setup-sp` and `spcomp` directly
 - **CI/CD**: GitHub Actions workflow (`.github/workflows/ci.yml`)
-- **Package Management**: Automated dependency resolution and packaging
+- **Package Management**: Dependencies cloned directly from their git repos during the CI build step
 
 ## Project Structure
 
@@ -45,7 +45,7 @@ addons/sourcemod/
 - **Status.sp**: Main plugin implementing the enhanced status command
 - **serverfps.inc**: Custom include for server performance monitoring
 - **serverfps.games.txt**: GameData file containing memory signatures
-- **sourceknight.yaml**: Build configuration and dependency management
+- **.github/workflows/ci.yml**: Build configuration and dependency management
 
 ## Code Standards & Style
 
@@ -88,10 +88,9 @@ if (!GetClientAuthId(player, authType, sPlayerAuth, sizeof(sPlayerAuth)))
 
 ### Building the Plugin
 ```bash
-# Using SourceKnight (preferred method)
-sourceknight build
+# CI builds automatically via .github/workflows/ci.yml (GitHub Actions)
 
-# Manual compilation (if SourceKnight unavailable)
+# Manual local compilation
 spcomp -i"addons/sourcemod/scripting/include" addons/sourcemod/scripting/Status.sp
 ```
 
@@ -164,7 +163,7 @@ if (hHandle == null)
 ## CI/CD Pipeline
 
 ### Automated Processes
-- **Build**: Compiles plugin using SourceKnight action
+- **Build**: Compiles plugin natively via `rumblefrog/setup-sp` + `spcomp` in GitHub Actions
 - **Package**: Creates distribution-ready archive with gamedata
 - **Release**: Generates tagged releases with downloadable assets
 - **Versioning**: Automatic latest tag management
@@ -220,4 +219,4 @@ When updating:
 1. Increment version in plugin info
 2. Update any breaking changes in this documentation
 3. Test with minimum required SourceMod version
-4. Update dependency versions in sourceknight.yaml if needed
+4. Update dependency clone references in `.github/workflows/ci.yml` if needed
