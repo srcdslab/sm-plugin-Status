@@ -196,11 +196,11 @@ public Action Command_Status(int client, const char[] command, int args)
 		char sPlayerID[8];
 		char sPlayerName[MAX_NAME_LENGTH + 2];
 		char sPlayerAuth[32];
-		char sPlayerTime[12];
-		char sPlayerPing[8];
-		char sPlayerLoss[8];
+		char sPlayerTime[12] = "";
+		char sPlayerPing[8] = "";
+		char sPlayerLoss[8] = "";
 		char sPlayerState[16];
-		char sPlayerAddr[32];
+		char sPlayerAddr[32] = "";
 		char sGeoIP[4] = "N/A";
 
 		FormatEx(sPlayerID,   sizeof(sPlayerID),   "%d", GetClientUserId(iPlayer));
