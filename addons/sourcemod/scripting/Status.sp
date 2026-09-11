@@ -30,6 +30,19 @@ enum StatusOrderBy
 	StatusOrderBy_State
 };
 
+// Player connection state, ordered from "most ready" to "least ready" so it can
+// double as the sort rank for StatusOrderBy_State.
+enum PlayerState
+{
+	PlayerState_Active = 0,
+	PlayerState_NoSteam,
+	PlayerState_Spawning
+};
+
+// Sort key used for players whose ping is not available yet (bots, still connecting),
+// so they are grouped at the bottom of a ping-ordered list instead of the top.
+#define PING_UNAVAILABLE 9999
+
 static int   s_iSortUserIds  [MAXPLAYERS + 1];
 static char  s_sSortNames    [MAXPLAYERS + 1][MAX_NAME_LENGTH];
 static float s_fSortTimes    [MAXPLAYERS + 1];
@@ -46,7 +59,7 @@ public Plugin myinfo =
 	name         = "Status Fixer",
 	author       = "zaCade + BotoX + Obus + .Rushaway",
 	description  = "Fixes the \"status\" command",
-	version      = "2.2.1",
+	version      = "2.2.2",
 	url          = "https://github.com/srcdslab/sm-plugin-Status"
 };
 
@@ -83,7 +96,7 @@ public Action Command_Status(int client, const char[] command, int args)
 	g_Cvar_HostTags.GetString(sTags, sizeof(sTags));
 
 	FormatEx(sServerName,   sizeof(sServerName),   "hostname: %s", sHostName);
-	FormatEx(sServerTags,   sizeof(sServerTags),   "tags      : %s", sTags);
+	FormatEx(sServerTags,   sizeof(sServerTags),   "tags    : %s", sTags);
 	FormatEx(sAdress,       sizeof(sAdress),        "%d.%d.%d.%d:%d", iServerIP >>> 24 & 255, iServerIP >>> 16 & 255, iServerIP >>> 8 & 255, iServerIP & 255, iServerPort);
 	FormatEx(sServerAdress, sizeof(sServerAdress),  "udp/ip  : %s", sAdress);
 
@@ -104,12 +117,12 @@ public Action Command_Status(int client, const char[] command, int args)
 		fClientDataOut = GetClientAvgData(client, NetFlow_Outgoing);
 
 		FormatEx(sServerData, sizeof(sServerData), "net I/O : %.2f/%.2f KiB/s (You: %.2f/%.2f KiB/s)", fServerDataIn / 1024, fServerDataOut / 1024, fClientDataIn / 1024, fClientDataOut / 1024);
-		FormatEx(sServerMap,  sizeof(sServerMap),  "map      : %s at: %.0f x, %.0f y, %.0f z", sMapName, fPosition[0], fPosition[1], fPosition[2]);
+		FormatEx(sServerMap,  sizeof(sServerMap),  "map     : %s at: %.0f x, %.0f y, %.0f z", sMapName, fPosition[0], fPosition[1], fPosition[2]);
 	}
 	else
 	{
 		FormatEx(sServerData, sizeof(sServerData), "net I/O : %.2f/%.2f KiB/s", fServerDataIn / 1024, fServerDataOut / 1024);
-		FormatEx(sServerMap,  sizeof(sServerMap),  "map      : %s", sMapName);
+		FormatEx(sServerMap,  sizeof(sServerMap),  "map     : %s", sMapName);
 	}
 
 	int iPlayers[MAXPLAYERS + 1];
@@ -137,63 +150,57 @@ public Action Command_Status(int client, const char[] command, int args)
 	float fServerFPS      = GetServerFPS();
 	fServerFPS = fServerFPS <= fServerTickRate ? fServerFPS : fServerTickRate;
 
-	FormatEx(sServerTickRate, sizeof(sServerTickRate), "tickrate : %.2f/%.2f (%d%%)", fServerFPS, fServerTickRate, RoundToNearest((fServerFPS / fServerTickRate) * 100));
+	FormatEx(sServerTickRate, sizeof(sServerTickRate), "tickrate: %.2f/%.2f (%d%%)", fServerFPS, fServerTickRate, RoundToNearest((fServerFPS / fServerTickRate) * 100));
 #else
 	int iServerTickRate = RoundToZero(1.0 / GetTickInterval());
 	int iTickRate       = g_iTickRate;
 	iTickRate = iTickRate <= iServerTickRate ? iTickRate : iServerTickRate;
 
-	FormatEx(sServerTickRate, sizeof(sServerTickRate), "tickrate : %d/%d (%d%%)", iTickRate, iServerTickRate, RoundToNearest((float(iTickRate) / float(iServerTickRate)) * 100));
+	FormatEx(sServerTickRate, sizeof(sServerTickRate), "tickrate: %d/%d (%d%%)", iTickRate, iServerTickRate, RoundToNearest((float(iTickRate) / float(iServerTickRate)) * 100));
 #endif
 
 	char sServerEdicts[128];
 	int iMaxEdicts  = GetMaxEntities();
 	int iUsedEdicts = GetEntityCount();
-	FormatEx(sServerEdicts, sizeof(sServerEdicts), "edicts : %d/%d/%d (used/max/free)", iUsedEdicts, iMaxEdicts, iMaxEdicts - iUsedEdicts);
+	FormatEx(sServerEdicts, sizeof(sServerEdicts), "edicts  : %d/%d/%d (used/max/free)", iUsedEdicts, iMaxEdicts, iMaxEdicts - iUsedEdicts);
 
 	// Build Header
 	char sHeader[2048];
 	FormatEx(sHeader, sizeof(sHeader), "%s \n%s \n%s \n%s \n%s \n%s \n%s \n%s",
 		sServerName, sServerTickRate, sServerAdress, sServerData, sServerMap, sServerTags, sServerEdicts, sServerPlayers);
 
-	// Determine width for the uniqueid column based on the AuthIdType, to ensure proper alignment of the table.
-	int iAuthIdWidth;
-	switch (view_as<AuthIdType>(g_Cvar_AuthIdType.IntValue))
-	{
-		case AuthId_Steam3:
-			iAuthIdWidth = 30;
+	AuthIdType eAuthType = view_as<AuthIdType>(g_Cvar_AuthIdType.IntValue);
 
-		default:
-			iAuthIdWidth = 24;
-	}
+	// Determine the width of the uniqueid column based on the AuthIdType, to keep the table aligned.
+	int iAuthIdWidth = (eAuthType == AuthId_Steam3) ? 30 : 24;
 
-	// Build formats for title and rows, with dynamic width for the uniqueid column
-	char sTitleFmt[64], sRowFmt[64];
-	FormatEx(sTitleFmt, sizeof(sTitleFmt), "# %%8s %%40s %%-%ds %%12s %%4s %%4s %%7s %%12s %%s", iAuthIdWidth);
-	FormatEx(sRowFmt,   sizeof(sRowFmt),   "# %%8s %%40s %%-%ds %%12s %%4s %%4s %%7s %%12s %%s", iAuthIdWidth);
+	// Build the row format once (title and rows share it), with a dynamic width for the uniqueid column.
+	char sRowFmt[64];
+	FormatEx(sRowFmt, sizeof(sRowFmt), "# %%8s %%40s %%-%ds %%12s %%4s %%4s %%8s %%12s %%s", iAuthIdWidth);
 
 	char sTitle[256];
-	FormatEx(sTitle, sizeof(sTitle), sTitleFmt,
+	FormatEx(sTitle, sizeof(sTitle), sRowFmt,
 		"userid", "name", "uniqueid", "connected", "ping", "loss", "state", "addr", "country");
 
 	PrintToConsole(client, "%s \n%s", sHeader, sTitle);
 
 	SortPlayers(iPlayers, iTotalClients, view_as<StatusOrderBy>(g_Cvar_OrderBy.IntValue), bPlayerManager);
 
-	AuthIdType eAuthType = view_as<AuthIdType>(g_Cvar_AuthIdType.IntValue);
-
 	for (int i = 0; i < iTotalClients; i++)
 	{
 		int iPlayer = iPlayers[i];
 
+		bool bFakeClient = IsFakeClient(iPlayer);
+		bool bInGame     = IsClientInGame(iPlayer);
+
 		char sPlayerID[8];
 		char sPlayerName[MAX_NAME_LENGTH + 2];
 		char sPlayerAuth[32];
-		char sPlayerTime[12];
-		char sPlayerPing[8];
-		char sPlayerLoss[8];
+		char sPlayerTime[12] = "";
+		char sPlayerPing[8] = "";
+		char sPlayerLoss[8] = "";
 		char sPlayerState[16];
-		char sPlayerAddr[32];
+		char sPlayerAddr[32] = "";
 		char sGeoIP[4] = "N/A";
 
 		FormatEx(sPlayerID,   sizeof(sPlayerID),   "%d", GetClientUserId(iPlayer));
@@ -202,7 +209,7 @@ public Action Command_Status(int client, const char[] command, int args)
 		if (!GetClientAuthId(iPlayer, eAuthType, sPlayerAuth, sizeof(sPlayerAuth)))
 			FormatEx(sPlayerAuth, sizeof(sPlayerAuth), "STEAM_ID_PENDING");
 
-		if (!IsFakeClient(iPlayer))
+		if (!bFakeClient)
 		{
 			int iTime    = RoundToFloor(GetClientTime(iPlayer));
 			int iHours   = iTime / 3600;
@@ -214,16 +221,21 @@ public Action Command_Status(int client, const char[] command, int args)
 			else
 				FormatEx(sPlayerTime, sizeof(sPlayerTime), "%d:%02d", iMinutes, iSeconds);
 
-			FormatEx(sPlayerPing, sizeof(sPlayerPing), "%d", RoundFloat(GetClientLatency(iPlayer, NetFlow_Outgoing) * 1000));
-			FormatEx(sPlayerLoss, sizeof(sPlayerLoss), "%d", RoundFloat(GetClientAvgLoss(iPlayer, NetFlow_Outgoing) * 100));
+			// Latency/loss are only meaningful once the client is in-game; querying earlier
+			// returns -1 and would print bogus negative values for still-connecting players.
+			if (bInGame)
+			{
+				FormatEx(sPlayerPing, sizeof(sPlayerPing), "%d", RoundFloat(GetClientLatency(iPlayer, NetFlow_Outgoing) * 1000));
+				FormatEx(sPlayerLoss, sizeof(sPlayerLoss), "%d", RoundFloat(GetClientAvgLoss(iPlayer, NetFlow_Outgoing) * 100));
+			}
 		}
 
 		GetPlayerStateLabel(iPlayer, bPlayerManager, sPlayerState, sizeof(sPlayerState));
 
-		if (!IsFakeClient(iPlayer) && (bIsAdmin || bGeoIP))
+		if (!bFakeClient && (bIsAdmin || bGeoIP))
 			GetClientIP(iPlayer, sPlayerAddr, sizeof(sPlayerAddr));
 
-		if (bGeoIP && !IsFakeClient(iPlayer))
+		if (bGeoIP && !bFakeClient && sPlayerAddr[0])
 			GeoipCode3(sPlayerAddr, sGeoIP);
 
 		PrintToConsole(client, sRowFmt,
@@ -252,10 +264,20 @@ void PrecomputeSortKeys(int[] iPlayers, int iCount, StatusOrderBy eOrderBy, bool
 				s_fSortTimes[i] = IsFakeClient(iPlayer) ? 0.0 : GetClientTime(iPlayer);
 
 			case StatusOrderBy_Ping:
-				s_iSortPings[i] = IsFakeClient(iPlayer) ? 9999 : RoundFloat(GetClientLatency(iPlayer, NetFlow_Outgoing) * 1000.0);
+			{
+				if (IsFakeClient(iPlayer) || !IsClientInGame(iPlayer))
+				{
+					s_iSortPings[i] = PING_UNAVAILABLE;
+				}
+				else
+				{
+					int iPing = RoundFloat(GetClientLatency(iPlayer, NetFlow_Outgoing) * 1000.0);
+					s_iSortPings[i] = (iPing < 0) ? PING_UNAVAILABLE : iPing;
+				}
+			}
 
 			case StatusOrderBy_State:
-				s_iSortStates[i] = GetPlayerStateSortRank(iPlayer, bPlayerManager);
+				s_iSortStates[i] = view_as<int>(GetPlayerState(iPlayer, bPlayerManager));
 		}
 	}
 }
@@ -303,6 +325,14 @@ public int SortPlayers_Comparator(int iElemA, int iElemB, const int[] iArray, Ha
 				return 1;
 		}
 	}
+
+	// Stable tie-breaker: equal keys keep a deterministic order (ascending userid)
+	// instead of whatever the unstable sort happens to produce.
+	if (s_iSortUserIds[iElemA] < s_iSortUserIds[iElemB])
+		return -1;
+	if (s_iSortUserIds[iElemA] > s_iSortUserIds[iElemB])
+		return 1;
+
 	return 0;
 }
 
@@ -329,36 +359,38 @@ void SortPlayers(int[] iPlayers, int iCount, StatusOrderBy eOrderBy, bool bPlaye
 		iPlayers[i] = iSorted[i];
 }
 
-int GetPlayerStateSortRank(int player, bool bPlayerManager)
+// Single source of truth for a player's connection state, used for both the
+// displayed label and the StatusOrderBy_State sort rank.
+PlayerState GetPlayerState(int player, bool bPlayerManager)
 {
+#if !defined _PlayerManager_included
+	#pragma unused bPlayerManager
+#endif
+
 	if (!IsClientInGame(player))
-		return 2;
+		return PlayerState_Spawning;
 
 #if defined _PlayerManager_included
 	if (bPlayerManager && !IsFakeClient(player) && !PM_IsPlayerSteam(player))
-		return 1;
+		return PlayerState_NoSteam;
 #endif
 
-	return 0;
+	return PlayerState_Active;
 }
 
 void GetPlayerStateLabel(int player, bool bPlayerManager, char[] buffer, int maxlen)
 {
-	if (!IsClientInGame(player))
+	switch (GetPlayerState(player, bPlayerManager))
 	{
-		FormatEx(buffer, maxlen, "spawning");
-		return;
-	}
+		case PlayerState_Spawning:
+			strcopy(buffer, maxlen, "spawning");
 
-#if defined _PlayerManager_included
-	if (bPlayerManager && !IsFakeClient(player) && !PM_IsPlayerSteam(player))
-	{
-		FormatEx(buffer, maxlen, "nosteam");
-		return;
-	}
-#endif
+		case PlayerState_NoSteam:
+			strcopy(buffer, maxlen, "nosteam");
 
-	FormatEx(buffer, maxlen, "active");
+		default:
+			strcopy(buffer, maxlen, "active");
+	}
 }
 
 #if !defined _serverfps_included //Inaccurate fallback
