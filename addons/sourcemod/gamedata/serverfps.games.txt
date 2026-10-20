@@ -16,6 +16,10 @@
 				{
 					"signature"	"host_frametime"
 				}
+				"linux64"
+				{
+					"signature"	"host_frametime"
+				}
 				"mac"
 				{
 					"signature"	"host_frametime"
@@ -37,6 +41,7 @@
 			{
 				"library"		"engine"
 				"linux"			"@host_frametime"
+				"linux64"			"@host_frametime"
 				"mac"			"@host_frametime"
 			}
 		}
