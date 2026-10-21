@@ -14,13 +14,13 @@ stock float GetServerFPS()
 /*
 * Internal Functions
 */
-stock Handle GetServerFPSConf()
+stock GameData GetServerFPSConf()
 {
-	static Handle hGameConf = null;
+	static GameData hGameConf = null;
 
 	if (hGameConf == null)
 	{
-		hGameConf = LoadGameConfigFile("serverfps.games");
+		hGameConf = new GameData("serverfps.games");
 
 		if (hGameConf == null)
 		{
@@ -37,7 +37,7 @@ stock Address GetHostTimeFrame()
 
 	if (pHostTimeFrame == Address_Null)
 	{
-		pHostTimeFrame = GameConfGetAddress(GetServerFPSConf(), "HostTimeFrame");
+		pHostTimeFrame = GetServerFPSConf().GetAddress("HostTimeFrame");
 
 		if (pHostTimeFrame == Address_Null)
 		{
