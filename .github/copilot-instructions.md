@@ -14,7 +14,7 @@ This repository contains **Status Fixer**, a SourceMod plugin that enhances the 
 ## Technical Environment
 
 ### Core Dependencies
-- **SourceMod**: 1.12.x
+- **SourceMod**: 1.12.x and 1.13.0.7427 (CI builds both, the release ships one archive per version)
 - **Language**: SourcePawn
 - **Compiler**: SourceMod Compiler (spcomp) via GitHub Actions (rumblefrog/setup-sp)
 - **Minimum SourceMod API**: 1.12+ for production deployment
